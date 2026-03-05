@@ -17,9 +17,13 @@ import os
 import logging
 from datetime import datetime
 
+from airflow.datasets import Dataset
 from airflow.decorators import dag, task
 
 log = logging.getLogger(__name__)
+
+# Dataset produzido por esta DAG — consumido por dag_dbt_transform
+dataset_meta = Dataset("urn:raw:meta_ads")
 
 
 def _build_meta_client():
@@ -36,11 +40,11 @@ def _build_db_client():
     """Instancia PostgresClient com vars de ambiente (executa no worker)."""
     from utils.db_client import PostgresClient
     return PostgresClient(
-        host=     os.environ["POSTGRES_HOST"],
-        port=     os.environ["POSTGRES_PORT"],
-        db=       os.environ["POSTGRES_DB"],
-        user=     os.environ["POSTGRES_USER"],
-        password= os.environ["POSTGRES_PASSWORD"],
+        host=     os.getenv("POSTGRES_HOST", "postgres"),
+        port=     os.getenv("POSTGRES_PORT", "5432"),
+        db=       os.getenv("POSTGRES_DB", "data_warehouse"),
+        user=     os.getenv("POSTGRES_USER", "admin"),
+        password= os.getenv("POSTGRES_PASSWORD", "admin"),
     )
 
 
@@ -78,7 +82,7 @@ def meta_ads_ingestion():
         log.info("[DAG meta_ads] extract_insights concluido: %d registros", n)
         return f"{n} registros em raw.meta_insights"
 
-    @task()
+    @task(outlets=[dataset_meta])
     def extract_campaigns() -> str:
         """
         Extrai campanhas da conta e carrega em raw.meta_campaigns.

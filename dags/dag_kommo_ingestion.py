@@ -27,9 +27,13 @@ import os
 import logging
 from datetime import datetime
 
+from airflow.datasets import Dataset
 from airflow.decorators import dag, task
 
 log = logging.getLogger(__name__)
+
+# Dataset produzido por esta DAG — consumido por dag_dbt_transform
+dataset_kommo = Dataset("urn:raw:kommo_leads")
 
 
 def _build_clients():
@@ -45,11 +49,11 @@ def _build_clients():
         token=    os.environ["KOMMO_TOKEN"],
     )
     db = PostgresClient(
-        host=     os.environ["POSTGRES_HOST"],
-        port=     os.environ["POSTGRES_PORT"],
-        db=       os.environ["POSTGRES_DB"],
-        user=     os.environ["POSTGRES_USER"],
-        password= os.environ["POSTGRES_PASSWORD"],
+        host=     os.getenv("POSTGRES_HOST", "postgres"),
+        port=     os.getenv("POSTGRES_PORT", "5432"),
+        db=       os.getenv("POSTGRES_DB", "data_warehouse"),
+        user=     os.getenv("POSTGRES_USER", "admin"),
+        password= os.getenv("POSTGRES_PASSWORD", "admin"),
     )
     return client, db
 
@@ -106,7 +110,7 @@ def kommo_ingestion():
 
     # ── Grupo 2: dados de referencia (paralelo, apos grupo 1) ─────────────────
 
-    @task()
+    @task(outlets=[dataset_kommo])
     def extract_pipelines() -> str:
         """
         Extrai pipelines e explode os status em linhas planas.
@@ -144,7 +148,7 @@ def kommo_ingestion():
         log.info("[DAG kommo] extract_pipelines: %d registros", n)
         return f"{n} registros em raw.kommo_pipelines_status"
 
-    @task()
+    @task(outlets=[dataset_kommo])
     def extract_users() -> str:
         """Extrai usuarios responsaveis. raw.kommo_users"""
         client, db = _build_clients()
@@ -153,7 +157,7 @@ def kommo_ingestion():
         log.info("[DAG kommo] extract_users: %d registros", n)
         return f"{n} registros em raw.kommo_users"
 
-    @task()
+    @task(outlets=[dataset_kommo])
     def extract_custom_fields() -> str:
         """
         Extrai definicao dos campos customizados (inclui os campos UTM).

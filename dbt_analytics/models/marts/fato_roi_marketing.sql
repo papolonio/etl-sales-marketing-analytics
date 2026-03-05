@@ -28,8 +28,9 @@
 */
 
 WITH meta_aggregated AS (
-    -- Agrega metricas de midia por ad (somando todos os dias do periodo)
+    -- Agrega metricas de midia por ad e por dia
     SELECT
+        data_ref        AS data,
         campaign_id,
         campaign_name,
         adset_id,
@@ -42,25 +43,30 @@ WITH meta_aggregated AS (
         SUM(inline_link_clicks) AS total_inline_clicks
     FROM {{ ref('stg_meta_insights') }}
     GROUP BY
+        data_ref,
         campaign_id, campaign_name,
         adset_id, adset_name,
         ad_id, ad_name
 ),
 
 kommo_aggregated AS (
-    -- Agrega resultados de CRM por ad (via UTM tracking)
-    -- Apenas leads com utm_ad_id preenchido (descarta leads organicos/sem rastreamento)
+    -- Agrega resultados de CRM por ad e por dia de criacao do lead
+    -- JOIN com Meta via data_ref = data_criacao: atribuicao diaria
     SELECT
         utm_ad_id,
+        data_criacao                                     AS data,
         COUNT(*)                                         AS leads_gerados,
         COUNT(*) FILTER (WHERE is_ganho)                AS vendas_ganhas,
         COALESCE(SUM(preco) FILTER (WHERE is_ganho), 0) AS receita_total
     FROM {{ ref('stg_kommo_leads') }}
     WHERE utm_ad_id IS NOT NULL
-    GROUP BY utm_ad_id
+    GROUP BY utm_ad_id, data_criacao
 )
 
 SELECT
+    -- Dimensao temporal
+    m.data,
+
     -- Hierarquia de campanha
     m.campaign_id,
     m.campaign_name,
@@ -105,6 +111,7 @@ SELECT
 
 FROM meta_aggregated m
 LEFT JOIN kommo_aggregated k
-    ON m.ad_id = k.utm_ad_id
+    ON  m.ad_id = k.utm_ad_id
+    AND m.data  = k.data
 
-ORDER BY m.total_spend DESC
+ORDER BY m.data DESC, m.total_spend DESC

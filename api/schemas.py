@@ -7,6 +7,7 @@ RoiRecord    : representa uma linha da tabela Gold public.fato_roi_marketing
 RoiResponse  : envelope paginado retornado por GET /api/v1/roi
 """
 
+from datetime import date
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,6 +26,9 @@ class RoiRecord(BaseModel):
         from_attributes=True,    # permite construir a partir de ORM rows
         populate_by_name=True,   # aceita tanto alias quanto nome do campo
     )
+
+    # Dimensao temporal
+    data: Optional[date] = Field(None, description="Data de referencia (date_start do Meta Ads)")
 
     # Hierarquia de campanha
     campaign_id:    Optional[str] = Field(None, description="ID da campanha no Meta Ads")

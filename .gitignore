@@ -16,3 +16,6 @@ pgdata/
 
 # OS
 .DS_Storedbt_analytics/target/
+dbt_analytics/target/
+contexto_sprint5.md
+_referencias/

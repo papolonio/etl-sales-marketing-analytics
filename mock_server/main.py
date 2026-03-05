@@ -11,6 +11,9 @@ Endpoints KommoCRM  : /api/v4/leads
                       /api/v4/leads/pipelines
                       /api/v4/users
                       /api/v4/leads/custom_fields
+
+Stress Test (feature/scale-mock-data):
+    ~50 campanhas | ~175 adsets | ~300+ ads | 1250 leads | 600 contatos
 """
 
 from fastapi import FastAPI, Query, Response
@@ -21,62 +24,102 @@ app = FastAPI(title="Mock API — Meta Ads & KommoCRM", version="1.0.0")
 
 
 # =============================================================================
-# SECAO 1 — META ADS
-# Hierarquia: Campaign -> AdSet -> Ad
-# Os IDs gerados aqui serao espelhados no custom_fields_values dos leads Kommo
-# para garantir o JOIN na camada Gold.
+# SECAO 1 — META ADS  (Hierarquia: Campaign -> AdSet -> Ad)
 # =============================================================================
 
-CAMPAIGNS = [
-    {"id": "120210000000001", "name": "Leads - Produto A",  "status": "ACTIVE", "start_time": "2025-01-01T00:00:00+0000", "objective": "LEAD_GENERATION"},
-    {"id": "120210000000002", "name": "Leads - Produto B",  "status": "ACTIVE", "start_time": "2025-01-15T00:00:00+0000", "objective": "LEAD_GENERATION"},
-    {"id": "120210000000003", "name": "Remarketing Geral",  "status": "ACTIVE", "start_time": "2025-02-01T00:00:00+0000", "objective": "CONVERSIONS"},
+# ── Vocabulario para nomes realistas ──────────────────────────────────────────
+_CAMP_TYPES = [
+    ("Leads",           "LEAD_GENERATION"),
+    ("Conversoes",      "CONVERSIONS"),
+    ("Trafego",         "LINK_CLICKS"),
+    ("Alcance",         "REACH"),
+    ("Remarketing",     "CONVERSIONS"),
 ]
+_PRODUCTS = [
+    "Produto A", "Produto B", "Produto C", "Produto D", "Produto E",
+    "Servico Premium", "Plano Basico", "Plano Pro", "Enterprise", "Starter",
+]
+_ADSET_TEMPLATES = [
+    "Interesse - {p}",      "Lookalike 1% - {p}",   "Lookalike 2% - {p}",
+    "Comportamento - {p}",  "Remarketing 7d",         "Remarketing 30d",
+    "Remarketing 60d",      "Abandono Formulario",    "Video Viewers 50pct",
+    "Visitantes do Site",   "Engajamento Instagram",  "Clientes Similares - {p}",
+]
+_AD_FORMATS  = ["Carousel", "Video", "Imagem", "Story", "Reels", "Collection"]
+_AD_VARIANTS = ["V1", "V2", "V3", "V4", "V5", "Dark Post", "UGC", "Depoimento"]
 
-ADSETS = [
-    {"id": "120220000000001", "name": "Interesse - Produto A",  "campaign_id": "120210000000001"},
-    {"id": "120220000000002", "name": "Lookalike - Produto A",  "campaign_id": "120210000000001"},
-    {"id": "120220000000003", "name": "Interesse - Produto B",  "campaign_id": "120210000000002"},
-    {"id": "120220000000004", "name": "Lookalike - Produto B",  "campaign_id": "120210000000002"},
-    {"id": "120220000000005", "name": "Remarketing 30d",        "campaign_id": "120210000000003"},
-    {"id": "120220000000006", "name": "Remarketing 60d",        "campaign_id": "120210000000003"},
-]
+# ── Geracao deterministica da hierarquia (seed=7) ─────────────────────────────
+_rng_h = random.Random(7)
 
-ADS = [
-    {"id": "120230000000001", "name": "Ad A1 - Carousel",    "adset_id": "120220000000001", "campaign_id": "120210000000001"},
-    {"id": "120230000000002", "name": "Ad A2 - Video",        "adset_id": "120220000000001", "campaign_id": "120210000000001"},
-    {"id": "120230000000003", "name": "Ad A3 - Lookalike",    "adset_id": "120220000000002", "campaign_id": "120210000000001"},
-    {"id": "120230000000004", "name": "Ad A4 - Lookalike V2", "adset_id": "120220000000002", "campaign_id": "120210000000001"},
-    {"id": "120230000000005", "name": "Ad B1 - Image",        "adset_id": "120220000000003", "campaign_id": "120210000000002"},
-    {"id": "120230000000006", "name": "Ad B2 - Video",        "adset_id": "120220000000003", "campaign_id": "120210000000002"},
-    {"id": "120230000000007", "name": "Ad B3 - Story",        "adset_id": "120220000000004", "campaign_id": "120210000000002"},
-    {"id": "120230000000008", "name": "Ad B4 - Carousel",     "adset_id": "120220000000004", "campaign_id": "120210000000002"},
-    {"id": "120230000000009", "name": "Ad Ret 30d V1",        "adset_id": "120220000000005", "campaign_id": "120210000000003"},
-    {"id": "120230000000010", "name": "Ad Ret 30d V2",        "adset_id": "120220000000005", "campaign_id": "120210000000003"},
-    {"id": "120230000000011", "name": "Ad Ret 60d V1",        "adset_id": "120220000000006", "campaign_id": "120210000000003"},
-    {"id": "120230000000012", "name": "Ad Ret 60d V2",        "adset_id": "120220000000006", "campaign_id": "120210000000003"},
-]
+CAMPAIGNS: list = []
+ADSETS:    list = []
+ADS:       list = []
+
+# 50 campanhas: 10 produtos × 5 tipos de campanha
+for _ci in range(50):
+    _c_id   = f"12021{_ci + 1:010d}"
+    _ctype, _obj = _CAMP_TYPES[_ci % len(_CAMP_TYPES)]
+    _prod        = _PRODUCTS[_ci % len(_PRODUCTS)]
+    _month       = _rng_h.randint(1, 10)
+    _day         = _rng_h.randint(1, 28)
+
+    CAMPAIGNS.append({
+        "id":         _c_id,
+        "name":       f"{_ctype} - {_prod} [{_ci + 1:02d}]",
+        "status":     "ACTIVE" if _rng_h.random() > 0.08 else "PAUSED",
+        "start_time": f"2025-{_month:02d}-{_day:02d}T00:00:00+0000",
+        "objective":  _obj,
+    })
+
+    # 2-5 adsets por campanha
+    for _ai in range(_rng_h.randint(2, 5)):
+        _a_id  = f"12022{len(ADSETS) + 1:010d}"
+        _tmpl  = _rng_h.choice(_ADSET_TEMPLATES)
+        _aname = _tmpl.format(p=_prod)
+
+        ADSETS.append({"id": _a_id, "name": _aname, "campaign_id": _c_id})
+
+        # 1-3 ads por adset
+        for _adi in range(_rng_h.randint(1, 3)):
+            _ad_id = f"12023{len(ADS) + 1:010d}"
+            ADS.append({
+                "id":          _ad_id,
+                "name":        f"Ad {_rng_h.choice(_AD_FORMATS)} {_rng_h.choice(_AD_VARIANTS)}",
+                "adset_id":    _a_id,
+                "campaign_id": _c_id,
+            })
 
 CAMPAIGN_MAP = {c["id"]: c for c in CAMPAIGNS}
 ADSET_MAP    = {a["id"]: a for a in ADSETS}
 
 
 def _build_insights() -> list:
-    """Gera metricas diarias por ad para os ultimos 15 dias (seed fixo = dados consistentes)."""
+    """
+    Metricas diarias por Ad para os ultimos 15 dias.
+    Cada campanha tem um 'fator de performance' fixo que diferencia
+    campanhas boas (alto CTR, alto CPA) de campanhas ruins — essencial
+    para o ROAS nao ficar uniforme na camada Gold.
+    """
     rng   = random.Random(42)
     today = date.today()
     rows  = []
+
+    # Fator de performance por campanha (entre 0.3x e 3.0x) — seed separado
+    rng_perf = random.Random(13)
+    perf_map = {c["id"]: rng_perf.uniform(0.3, 3.0) for c in CAMPAIGNS}
 
     for days_back in range(15):
         day = today - timedelta(days=days_back)
         for ad in ADS:
             adset    = ADSET_MAP[ad["adset_id"]]
             campaign = CAMPAIGN_MAP[ad["campaign_id"]]
-            impr     = rng.randint(800, 8000)
-            clicks   = rng.randint(20, max(21, int(impr * 0.06)))
-            inline   = rng.randint(10, clicks)
-            leads_n  = rng.randint(0, max(1, int(inline * 0.12)))
-            spend    = round(rng.uniform(8.0, 200.0), 2)
+            perf     = perf_map[campaign["id"]]
+
+            impr   = int(rng.randint(500, 6000) * perf)
+            clicks = rng.randint(15, max(16, int(impr * 0.05 * perf)))
+            inline = rng.randint(8, max(9, clicks))
+            leads_n = rng.randint(0, max(1, int(inline * 0.10 * perf)))
+            spend  = round(rng.uniform(15.0, 400.0) * min(perf, 2.0), 2)
 
             rows.append({
                 "account_id":         "123456789",
@@ -96,8 +139,8 @@ def _build_insights() -> list:
                 "actions": [
                     {"action_type": "lead",                           "value": str(leads_n)},
                     {"action_type": "link_click",                     "value": str(clicks)},
-                    {"action_type": "post_engagement",                "value": str(rng.randint(clicks, clicks + 80))},
-                    {"action_type": "page_view",                      "value": str(rng.randint(inline, inline + 40))},
+                    {"action_type": "post_engagement",                "value": str(rng.randint(clicks, clicks + 120))},
+                    {"action_type": "page_view",                      "value": str(rng.randint(inline, inline + 60))},
                     {"action_type": "landing_page_view",              "value": str(inline)},
                     {"action_type": "onsite_conversion.lead_grouped", "value": str(leads_n)},
                 ],
@@ -165,57 +208,17 @@ USERS_DATA = [
     {"id": 11422907, "name": "Antonio"},
     {"id": 11422908, "name": "Ana Vendas"},
     {"id": 11422909, "name": "Carlos SDR"},
+    {"id": 11422910, "name": "Mariana Hunter"},
+    {"id": 11422911, "name": "Roberto Closer"},
 ]
 
 CUSTOM_FIELDS_DATA = [
-    {
-        "id": UTM_FIELD_SOURCE, "name": "UTM Source", "type": "text",
-        "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_SOURCE", "sort": 10,
-        "is_api_only": True, "enums": None, "group_id": None,
-        "required_statuses": None, "is_deletable": True, "is_predefined": False,
-        "entity_type": "leads", "tracking_callback": None, "remind": None,
-        "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None,
-    },
-    {
-        "id": UTM_FIELD_MEDIUM, "name": "UTM Medium", "type": "text",
-        "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_MEDIUM", "sort": 20,
-        "is_api_only": True, "enums": None, "group_id": None,
-        "required_statuses": None, "is_deletable": True, "is_predefined": False,
-        "entity_type": "leads", "tracking_callback": None, "remind": None,
-        "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None,
-    },
-    {
-        "id": UTM_FIELD_CAMPAIGN_ID, "name": "UTM Campaign ID", "type": "text",
-        "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_CAMPAIGN_ID", "sort": 30,
-        "is_api_only": True, "enums": None, "group_id": None,
-        "required_statuses": None, "is_deletable": True, "is_predefined": False,
-        "entity_type": "leads", "tracking_callback": None, "remind": None,
-        "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None,
-    },
-    {
-        "id": UTM_FIELD_ADSET_ID, "name": "UTM AdSet ID", "type": "text",
-        "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_ADSET_ID", "sort": 40,
-        "is_api_only": True, "enums": None, "group_id": None,
-        "required_statuses": None, "is_deletable": True, "is_predefined": False,
-        "entity_type": "leads", "tracking_callback": None, "remind": None,
-        "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None,
-    },
-    {
-        "id": UTM_FIELD_AD_ID, "name": "UTM Ad ID", "type": "text",
-        "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_AD_ID", "sort": 50,
-        "is_api_only": True, "enums": None, "group_id": None,
-        "required_statuses": None, "is_deletable": True, "is_predefined": False,
-        "entity_type": "leads", "tracking_callback": None, "remind": None,
-        "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None,
-    },
-    {
-        "id": 901006, "name": "Telefone", "type": "multitext",
-        "account_id": KOMMO_ACCOUNT_ID, "code": "PHONE", "sort": 60,
-        "is_api_only": False, "enums": None, "group_id": None,
-        "required_statuses": None, "is_deletable": False, "is_predefined": True,
-        "entity_type": "leads", "tracking_callback": None, "remind": None,
-        "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None,
-    },
+    {"id": UTM_FIELD_SOURCE,      "name": "UTM Source",      "type": "text", "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_SOURCE",      "sort": 10, "is_api_only": True,  "enums": None, "group_id": None, "required_statuses": None, "is_deletable": True,  "is_predefined": False, "entity_type": "leads", "tracking_callback": None, "remind": None, "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None},
+    {"id": UTM_FIELD_MEDIUM,      "name": "UTM Medium",      "type": "text", "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_MEDIUM",      "sort": 20, "is_api_only": True,  "enums": None, "group_id": None, "required_statuses": None, "is_deletable": True,  "is_predefined": False, "entity_type": "leads", "tracking_callback": None, "remind": None, "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None},
+    {"id": UTM_FIELD_CAMPAIGN_ID, "name": "UTM Campaign ID", "type": "text", "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_CAMPAIGN_ID", "sort": 30, "is_api_only": True,  "enums": None, "group_id": None, "required_statuses": None, "is_deletable": True,  "is_predefined": False, "entity_type": "leads", "tracking_callback": None, "remind": None, "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None},
+    {"id": UTM_FIELD_ADSET_ID,    "name": "UTM AdSet ID",    "type": "text", "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_ADSET_ID",    "sort": 40, "is_api_only": True,  "enums": None, "group_id": None, "required_statuses": None, "is_deletable": True,  "is_predefined": False, "entity_type": "leads", "tracking_callback": None, "remind": None, "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None},
+    {"id": UTM_FIELD_AD_ID,       "name": "UTM Ad ID",       "type": "text", "account_id": KOMMO_ACCOUNT_ID, "code": "UTM_AD_ID",       "sort": 50, "is_api_only": True,  "enums": None, "group_id": None, "required_statuses": None, "is_deletable": True,  "is_predefined": False, "entity_type": "leads", "tracking_callback": None, "remind": None, "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None},
+    {"id": 901006,                "name": "Telefone",         "type": "multitext", "account_id": KOMMO_ACCOUNT_ID, "code": "PHONE",   "sort": 60, "is_api_only": False, "enums": None, "group_id": None, "required_statuses": None, "is_deletable": False, "is_predefined": True,  "entity_type": "leads", "tracking_callback": None, "remind": None, "triggers": None, "currency": None, "hidden_statuses": None, "chained_lists": None},
 ]
 
 
@@ -230,30 +233,65 @@ def _utm_custom_fields(campaign_id: str, adset_id: str, ad_id: str) -> list:
     ]
 
 
-def _build_leads() -> list:
-    rng   = random.Random(99)
-    names = [
-        "Joao Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa", "Bruno Lima",
-        "Fernanda Rocha", "Lucas Ferreira", "Patricia Alves", "Rafael Souza", "Juliana Martins",
-        "Marcos Pereira", "Camila Nunes", "Diego Barbosa", "Tatiana Gomes", "Andre Carvalho",
-        "Isabela Ribeiro", "Thiago Mendes", "Vanessa Castro", "Felipe Azevedo", "Larissa Pinto",
-    ]
-    user_ids  = [u["id"] for u in USERS_DATA]
-    statuses  = [7101, 7102, 7103, 7104, 142, 143]
-    leads     = []
+# ── Pools de nomes para geracao de leads e contatos ───────────────────────────
+_FIRST_NAMES = [
+    "Joao", "Maria", "Carlos", "Ana", "Bruno", "Fernanda", "Lucas", "Patricia",
+    "Rafael", "Juliana", "Marcos", "Camila", "Diego", "Tatiana", "Andre", "Isabela",
+    "Thiago", "Vanessa", "Felipe", "Larissa", "Paulo", "Beatriz", "Leonardo", "Amanda",
+    "Rodrigo", "Leticia", "Gustavo", "Julia", "Ricardo", "Mariana", "Henrique", "Gabriela",
+    "Eduardo", "Nathalia", "Daniel", "Priscila", "Matheus", "Carolina", "Victor", "Renata",
+]
+_LAST_NAMES = [
+    "Silva", "Santos", "Oliveira", "Costa", "Lima", "Rocha", "Ferreira", "Alves",
+    "Souza", "Martins", "Pereira", "Nunes", "Barbosa", "Gomes", "Carvalho", "Ribeiro",
+    "Mendes", "Castro", "Azevedo", "Pinto", "Araujo", "Rodrigues", "Moreira", "Nascimento",
+    "Cardoso", "Cavalcante", "Monteiro", "Cruz", "Teixeira", "Freitas", "Correia", "Moura",
+    "Miranda", "Borges", "Campos", "Lopes", "Ramos", "Machado", "Vieira", "Cunha",
+]
 
-    for i, name in enumerate(names):
+# Distribuicao de status: ~22% ganho | ~28% perdido | ~50% em andamento
+_STATUS_POOL = (
+    [7101] * 15 + [7102] * 12 + [7103] * 13 + [7104] * 10
+    + [142]  * 22
+    + [143]  * 28
+)
+
+
+def _build_leads(n: int = 1250) -> list:
+    """
+    Gera {n} leads com distribuicao realista de status e UTMs correlacionados
+    com a hierarquia do Meta Ads — garantindo o JOIN na camada Gold.
+    """
+    rng      = random.Random(99)
+    user_ids = [u["id"] for u in USERS_DATA]
+    leads    = []
+
+    for i in range(n):
         ad       = ADS[rng.randint(0, len(ADS) - 1)]
         adset    = ADSET_MAP[ad["adset_id"]]
         campaign = CAMPAIGN_MAP[ad["campaign_id"]]
-        created  = int(datetime(2025, rng.randint(1, 11), rng.randint(1, 28)).timestamp())
-        status   = rng.choice(statuses)
-        price    = rng.randint(1500, 20000) if status == 142 else rng.randint(0, 5000)
-        has_utm  = rng.random() > 0.15  # ~85% dos leads rastreados via UTM
+
+        month   = rng.randint(1, 11)
+        day     = rng.randint(1, 28)
+        created = int(datetime(2025, month, day).timestamp())
+        status  = rng.choice(_STATUS_POOL)
+
+        # Preco realista por status:
+        #   Ganho    -> ticket medio R$ 2.000-80.000 (deals de negocio)
+        #   Pipeline -> valor estimado 0 (nao fechado)
+        #   Perdido  -> 0
+        if status == 142:
+            price = rng.randint(2000, 80000)
+        elif status in (7103, 7104):
+            price = rng.randint(0, 15000)  # valor estimado em negociacao
+        else:
+            price = 0
+
+        has_utm = rng.random() > 0.12  # ~88% rastreados via UTM
 
         leads.append({
             "id":                  1000001 + i,
-            "name":                f"Lead - {name}",
+            "name":                f"Lead - {rng.choice(_FIRST_NAMES)} {rng.choice(_LAST_NAMES)}",
             "price":               price,
             "responsible_user_id": rng.choice(user_ids),
             "group_id":            rng.choice([1, 2]),
@@ -264,7 +302,7 @@ def _build_leads() -> list:
             "updated_by":          rng.choice(user_ids),
             "created_at":          created,
             "updated_at":          created + rng.randint(3600, 86400),
-            "closed_at":           created + rng.randint(86400, 604800) if status in [142, 143] else None,
+            "closed_at":           created + rng.randint(86400, 604800) if status in (142, 143) else None,
             "closest_task_at":     None,
             "is_deleted":          False,
             "score":               None,
@@ -272,26 +310,22 @@ def _build_leads() -> list:
             "labor_cost":          0,
             "custom_fields_values": _utm_custom_fields(campaign["id"], adset["id"], ad["id"]) if has_utm else [],
             "_embedded": {
-                "tags":        [{"id": rng.randint(100, 110), "name": rng.choice(["facebook", "instagram", "indicacao", "site"])}],
+                "tags":        [{"id": rng.randint(100, 115), "name": rng.choice(["facebook", "instagram", "indicacao", "site", "google"])}],
                 "companies":   [],
-                "loss_reason": [{"id": rng.randint(1001, 1005), "name": "Sem interesse"}] if status == 143 else [],
+                "loss_reason": [{"id": rng.randint(1001, 1005), "name": rng.choice(["Sem interesse", "Preco alto", "Comprou concorrente", "Sem orcamento", "Sem contato"])}] if status == 143 else [],
             },
         })
     return leads
 
 
-def _build_contacts() -> list:
-    rng         = random.Random(88)
-    first_names = ["Joao", "Maria", "Carlos", "Ana", "Bruno", "Fernanda", "Lucas", "Patricia", "Rafael", "Juliana",
-                   "Marcos", "Camila", "Diego", "Tatiana", "Andre", "Isabela", "Thiago", "Vanessa", "Felipe", "Larissa"]
-    last_names  = ["Silva", "Santos", "Oliveira", "Costa", "Lima", "Rocha", "Ferreira", "Alves", "Souza", "Martins",
-                   "Pereira", "Nunes", "Barbosa", "Gomes", "Carvalho", "Ribeiro", "Mendes", "Castro", "Azevedo", "Pinto"]
-    user_ids    = [u["id"] for u in USERS_DATA]
-    contacts    = []
+def _build_contacts(n: int = 600) -> list:
+    rng      = random.Random(88)
+    user_ids = [u["id"] for u in USERS_DATA]
+    contacts = []
 
-    for i in range(20):
-        fn      = first_names[i]
-        ln      = last_names[i]
+    for i in range(n):
+        fn      = rng.choice(_FIRST_NAMES)
+        ln      = rng.choice(_LAST_NAMES)
         created = int(datetime(2025, rng.randint(1, 11), rng.randint(1, 28)).timestamp())
         contacts.append({
             "id":                  2000001 + i,
@@ -312,11 +346,11 @@ def _build_contacts() -> list:
                 {
                     "field_id": 901006, "field_name": "Telefone", "field_code": "PHONE",
                     "field_type": "multitext",
-                    "values": [{"value": f"(11) 9{rng.randint(1000,9999)}-{rng.randint(1000,9999)}", "enum_id": 1, "enum_code": "WORK"}],
+                    "values": [{"value": f"(1{rng.randint(1,9)}) 9{rng.randint(1000,9999)}-{rng.randint(1000,9999)}", "enum_id": 1, "enum_code": "WORK"}],
                 }
             ],
             "_embedded": {
-                "tags":      [{"id": rng.randint(100, 110), "name": rng.choice(["facebook", "instagram", "indicacao", "site"])}],
+                "tags":      [{"id": rng.randint(100, 115), "name": rng.choice(["facebook", "instagram", "indicacao", "site", "google"])}],
                 "companies": [],
             },
         })
@@ -324,10 +358,11 @@ def _build_contacts() -> list:
 
 
 def _build_events(leads: list) -> list:
-    rng         = random.Random(77)
+    rng = random.Random(77)
     transitions = [
         (7101, 7102), (7102, 7103), (7103, 7104),
         (7104, 142),  (7104, 143),  (7101, 143),
+        (7102, 143),  (7103, 142),
     ]
     events = []
     for i, lead in enumerate(leads):
@@ -347,11 +382,12 @@ def _build_events(leads: list) -> list:
     return events
 
 
-ALL_LEADS    = _build_leads()
-ALL_CONTACTS = _build_contacts()
+ALL_LEADS    = _build_leads(1250)
+ALL_CONTACTS = _build_contacts(600)
 ALL_EVENTS   = _build_events(ALL_LEADS)
 
-_PAGE_SIZE = 8  # tamanho da pagina para todos os endpoints paginados
+# Pagina de 250 itens (igual ao limit padrao da API Kommo)
+_PAGE_SIZE = 250
 
 
 def _paginate(data: list, page: int) -> list:
@@ -445,13 +481,26 @@ def kommo_custom_fields(page: int = Query(1), limit: int = Query(250)):
 # ── Health check ──────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "mock-api", "endpoints": [
-        "/v19.0/act_{account_id}/insights",
-        "/v19.0/act_{account_id}/campaigns",
-        "/api/v4/leads",
-        "/api/v4/contacts",
-        "/api/v4/events",
-        "/api/v4/leads/pipelines",
-        "/api/v4/users",
-        "/api/v4/leads/custom_fields",
-    ]}
+    return {
+        "status":    "ok",
+        "service":   "mock-api",
+        "volume": {
+            "campanhas":  len(CAMPAIGNS),
+            "adsets":     len(ADSETS),
+            "ads":        len(ADS),
+            "insights":   len(INSIGHTS_DATA),
+            "leads":      len(ALL_LEADS),
+            "contatos":   len(ALL_CONTACTS),
+            "eventos":    len(ALL_EVENTS),
+        },
+        "endpoints": [
+            "/v19.0/act_{account_id}/insights",
+            "/v19.0/act_{account_id}/campaigns",
+            "/api/v4/leads",
+            "/api/v4/contacts",
+            "/api/v4/events",
+            "/api/v4/leads/pipelines",
+            "/api/v4/users",
+            "/api/v4/leads/custom_fields",
+        ],
+    }

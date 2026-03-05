@@ -5,9 +5,7 @@ version: "3.8"
 # Permite DRY: webserver, scheduler e init herdam build, env, volumes e rede.
 # =============================================================================
 x-airflow-common: &airflow-common
-  build:
-    context: .
-    dockerfile: airflow/Dockerfile
+  build: .    # Dockerfile na raiz: Airflow + dbt-postgres (Sprint 5)
   environment: &airflow-common-env
     # ── Executor e banco de metadados do Airflow ─────────────────────────────
     AIRFLOW__CORE__EXECUTOR:                    LocalExecutor
@@ -24,7 +22,9 @@ x-airflow-common: &airflow-common
     KOMMO_API_URL:     ${KOMMO_API_URL:-http://mock_api:8000}
     KOMMO_TOKEN:       ${KOMMO_TOKEN:-mock_token_portfolio_kommo}
     # ── Conexao com o Data Warehouse ─────────────────────────────────────────
-    POSTGRES_HOST:     ${POSTGRES_HOST:-postgres}
+    # POSTGRES_HOST hardcoded: evita que .env com POSTGRES_HOST=localhost
+    # sobrescreva o valor (${VAR:-default} so usa o default quando VAR esta ausente).
+    POSTGRES_HOST:     postgres
     POSTGRES_PORT:     ${POSTGRES_PORT:-5432}
     POSTGRES_DB:       ${POSTGRES_DB:-data_warehouse}
     POSTGRES_USER:     ${POSTGRES_USER:-admin}
@@ -33,6 +33,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ./dbt_analytics:/opt/airflow/dbt_analytics
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
     - etl_network

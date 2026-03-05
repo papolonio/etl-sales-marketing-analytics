@@ -172,14 +172,14 @@ def get_roi_by_campaign(campaign_id: str, db: Session = Depends(get_db)):
 
 @app.get(
     "/api/v1/roi/ad/{ad_id}",
-    response_model=RoiRecord,
-    summary="ROI de um anuncio especifico (granularidade maxima)",
+    response_model=List[RoiRecord],
+    summary="ROI de um anuncio especifico por dia (granularidade maxima)",
     tags=["ROI Marketing"],
 )
 def get_roi_by_ad(ad_id: str, db: Session = Depends(get_db)):
     """
-    Retorna as metricas de ROI de um unico anuncio.
-    Este e o nivel mais granular do pipeline: Campaign > AdSet > **Ad**.
+    Retorna as metricas diarias de ROI de um unico anuncio.
+    Este e o nivel mais granular do pipeline: Campaign > AdSet > **Ad** > **Dia**.
 
     - **ad_id**: ID do anuncio no Meta Ads (ex: `120230000000001`)
     """
@@ -187,17 +187,17 @@ def get_roi_by_ad(ad_id: str, db: Session = Depends(get_db)):
         SELECT *
         FROM {_TABELA_ROI}
         WHERE ad_id = :ad_id
-        LIMIT 1
+        ORDER BY data DESC
     """)
     try:
-        row = db.execute(sql, {"ad_id": ad_id}).mappings().first()
+        rows = db.execute(sql, {"ad_id": ad_id}).mappings().all()
     except (OperationalError, ProgrammingError) as exc:
         _handle_db_error(exc, f"GET /api/v1/roi/ad/{ad_id}")
 
-    if row is None:
+    if not rows:
         raise HTTPException(
             status_code=404,
             detail=f"Anuncio '{ad_id}' nao encontrado em {_TABELA_ROI}.",
         )
 
-    return RoiRecord(**dict(row))
+    return [RoiRecord(**dict(row)) for row in rows]
