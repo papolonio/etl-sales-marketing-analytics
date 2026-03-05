@@ -16,3 +16,4 @@ pgdata/
 
 # OS
 .DS_Storedbt_analytics/target/
+dbt_analytics/target/
