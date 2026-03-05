@@ -5,9 +5,7 @@ version: "3.8"
 # Permite DRY: webserver, scheduler e init herdam build, env, volumes e rede.
 # =============================================================================
 x-airflow-common: &airflow-common
-  build:
-    context: .
-    dockerfile: airflow/Dockerfile
+  build: .    # Dockerfile na raiz: Airflow + dbt-postgres (Sprint 5)
   environment: &airflow-common-env
     # ── Executor e banco de metadados do Airflow ─────────────────────────────
     AIRFLOW__CORE__EXECUTOR:                    LocalExecutor
@@ -35,6 +33,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ./dbt_analytics:/opt/airflow/dbt_analytics
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
     - etl_network
