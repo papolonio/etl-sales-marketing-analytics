@@ -1,0 +1,45 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: >
+      Camada Bronze — dados brutos extraidos pelas DAGs do Airflow.
+      Nenhuma transformacao aplicada; representa o estado exato das APIs-fonte.
+
+    tables:
+      - name: meta_insights
+        description: >
+          Metricas diarias por Ad (nivel mais granular) extraidas da Graph API.
+          Cada linha = 1 ad em 1 dia. Contém spend, clicks, impressions e actions (JSON).
+
+      - name: meta_campaigns
+        description: >
+          Campanhas da conta Meta Ads com status e data de inicio.
+
+      - name: kommo_leads
+        description: >
+          Leads do CRM Kommo. O campo custom_fields_values (JSON array)
+          contem os UTMs de rastreamento (UTM_CAMPAIGN_ID, UTM_ADSET_ID, UTM_AD_ID)
+          que permitem o JOIN com a hierarquia do Meta Ads.
+
+      - name: kommo_contacts
+        description: Contatos associados aos leads.
+
+      - name: kommo_events
+        description: >
+          Historico de mudancas de status (lead_status_changed).
+          Base para calculos de funil e tempo medio de conversao.
+
+      - name: kommo_pipelines_status
+        description: >
+          Tabela plana com pipelines e seus status.
+          Dimensao para decodificar status_id nos leads.
+
+      - name: kommo_users
+        description: Usuarios responsaveis pelos leads (dimensao).
+
+      - name: kommo_custom_fields
+        description: >
+          Dicionario de metadados dos campos customizados do Kommo.
+          Inclui os campos UTM usados para rastreamento.
