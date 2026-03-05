@@ -17,9 +17,13 @@ import os
 import logging
 from datetime import datetime
 
+from airflow.datasets import Dataset
 from airflow.decorators import dag, task
 
 log = logging.getLogger(__name__)
+
+# Dataset produzido por esta DAG — consumido por dag_dbt_transform
+dataset_meta = Dataset("urn:raw:meta_ads")
 
 
 def _build_meta_client():
@@ -78,7 +82,7 @@ def meta_ads_ingestion():
         log.info("[DAG meta_ads] extract_insights concluido: %d registros", n)
         return f"{n} registros em raw.meta_insights"
 
-    @task()
+    @task(outlets=[dataset_meta])
     def extract_campaigns() -> str:
         """
         Extrai campanhas da conta e carrega em raw.meta_campaigns.

@@ -27,9 +27,13 @@ import os
 import logging
 from datetime import datetime
 
+from airflow.datasets import Dataset
 from airflow.decorators import dag, task
 
 log = logging.getLogger(__name__)
+
+# Dataset produzido por esta DAG — consumido por dag_dbt_transform
+dataset_kommo = Dataset("urn:raw:kommo_leads")
 
 
 def _build_clients():
@@ -106,7 +110,7 @@ def kommo_ingestion():
 
     # ── Grupo 2: dados de referencia (paralelo, apos grupo 1) ─────────────────
 
-    @task()
+    @task(outlets=[dataset_kommo])
     def extract_pipelines() -> str:
         """
         Extrai pipelines e explode os status em linhas planas.
@@ -144,7 +148,7 @@ def kommo_ingestion():
         log.info("[DAG kommo] extract_pipelines: %d registros", n)
         return f"{n} registros em raw.kommo_pipelines_status"
 
-    @task()
+    @task(outlets=[dataset_kommo])
     def extract_users() -> str:
         """Extrai usuarios responsaveis. raw.kommo_users"""
         client, db = _build_clients()
@@ -153,7 +157,7 @@ def kommo_ingestion():
         log.info("[DAG kommo] extract_users: %d registros", n)
         return f"{n} registros em raw.kommo_users"
 
-    @task()
+    @task(outlets=[dataset_kommo])
     def extract_custom_fields() -> str:
         """
         Extrai definicao dos campos customizados (inclui os campos UTM).
