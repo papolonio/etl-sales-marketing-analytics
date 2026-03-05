@@ -1,0 +1,144 @@
+version: "3.8"
+
+# =============================================================================
+# Extensao comum a todos os servicos do Airflow
+# Permite DRY: webserver, scheduler e init herdam build, env, volumes e rede.
+# =============================================================================
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  environment: &airflow-common-env
+    # ── Executor e banco de metadados do Airflow ─────────────────────────────
+    AIRFLOW__CORE__EXECUTOR:                    LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:        postgresql+psycopg2://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY:                  ${AIRFLOW_FERNET_KEY:-JexE3D_iG0RPkfBNf4K1X9bSWDJ__8L_nZ9gCi5CQPM=}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES:               "false"
+    AIRFLOW__API__AUTH_BACKENDS:                "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+    AIRFLOW__WEBSERVER__SECRET_KEY:             ${AIRFLOW_SECRET_KEY:-portfolio-secret-change-in-prod}
+    # ── Variaveis de negocio injetadas nas DAGs ───────────────────────────────
+    META_API_URL:      ${META_API_URL:-http://mock_api:8000}
+    META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:-mock_token_portfolio_meta}
+    META_ACCOUNT_ID:   ${META_ACCOUNT_ID:-123456789}
+    KOMMO_API_URL:     ${KOMMO_API_URL:-http://mock_api:8000}
+    KOMMO_TOKEN:       ${KOMMO_TOKEN:-mock_token_portfolio_kommo}
+    # ── Conexao com o Data Warehouse ─────────────────────────────────────────
+    POSTGRES_HOST:     ${POSTGRES_HOST:-postgres}
+    POSTGRES_PORT:     ${POSTGRES_PORT:-5432}
+    POSTGRES_DB:       ${POSTGRES_DB:-data_warehouse}
+    POSTGRES_USER:     ${POSTGRES_USER:-admin}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  user: "${AIRFLOW_UID:-50000}:0"
+  networks:
+    - etl_network
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+# =============================================================================
+# Servicos
+# =============================================================================
+services:
+
+  # ── PostgreSQL (Data Warehouse + Metadata Airflow) ─────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: data_warehouse
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-data_warehouse}
+      POSTGRES_USER:     ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - etl_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-data_warehouse}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Mock API Server (Meta Ads + KommoCRM) ─────────────────────────────────
+  mock_api:
+    build:
+      context: ./mock_server
+    container_name: mock_api
+    ports:
+      - "8000:8000"
+    networks:
+      - etl_network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Airflow Init (migra DB e cria usuario admin — roda uma unica vez) ──────
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname Portfolio \
+          --role Admin \
+          --email admin@portfolio.local \
+          --password admin \
+        2>/dev/null || echo "Usuario admin ja existe, seguindo..."
+    restart: "no"
+
+  # ── Airflow Webserver (UI — porta 8080) ────────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── Airflow Scheduler ──────────────────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  etl_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
