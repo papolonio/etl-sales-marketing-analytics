@@ -166,6 +166,33 @@ services:
       retries: 3
       start_period: 10s
 
+# ── dbt Docs — Documentacao interativa do pipeline (Sprint 5) ────────────
+  # Acesso: http://localhost:8081
+  dbt-docs:
+    build: .
+    container_name: pipeline-dbt-docs
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST:     postgres
+      POSTGRES_PORT:     ${POSTGRES_PORT:-5432}
+      POSTGRES_DB:       ${POSTGRES_DB:-data_warehouse}
+      POSTGRES_USER:     ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+    volumes:
+      - ./dbt_analytics:/opt/airflow/dbt_analytics
+    ports:
+      - "8081:8081"
+    networks:
+      - etl_network
+    command: >
+      bash -c "cd /opt/airflow/dbt_analytics &&
+      dbt docs generate --profiles-dir . &&
+      cd target &&
+      python -m http.server 8081"
+
 networks:
   etl_network:
     driver: bridge
