@@ -1,0 +1,18 @@
+# Ambientes e Segredos
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Airflow
+logs/
+plugins/
+airflow-webserver.pid
+
+# Banco de Dados
+postgres-data/
+pgdata/
+
+# OS
+.DS_Store
