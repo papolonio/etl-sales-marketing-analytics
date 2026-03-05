@@ -29,9 +29,7 @@ from schemas import RoiRecord, RoiResponse
 
 log = logging.getLogger("uvicorn.error")
 
-# =============================================================================
 # Startup / Shutdown
-# =============================================================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,10 +43,7 @@ async def lifespan(app: FastAPI):
         log.info("Conexao com o banco de dados verificada com sucesso.")
     yield
 
-
-# =============================================================================
 # Aplicacao
-# =============================================================================
 
 app = FastAPI(
     title="Lead-to-Cash Data API",
@@ -66,10 +61,7 @@ app = FastAPI(
 # Constante com o nome completo da tabela Gold
 _TABELA_ROI = "public.fato_roi_marketing"
 
-
-# =============================================================================
 # Handlers de erro reutilizaveis
-# =============================================================================
 
 def _handle_db_error(exc: Exception, context: str) -> None:
     """
@@ -156,7 +148,6 @@ def get_roi(
 def get_roi_by_campaign(campaign_id: str, db: Session = Depends(get_db)):
     """
     Retorna todos os anuncios de uma campanha especifica com suas metricas de ROI.
-
     - **campaign_id**: ID da campanha no Meta Ads (ex: `120210000000001`)
     """
     sql = text(f"""
