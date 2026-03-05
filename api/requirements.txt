@@ -1,7 +1,3 @@
-# dbt Core (Sprint 3)
-dbt-postgres==1.7.9
-
-# Data API (Sprint 4)
 fastapi==0.111.0
 uvicorn==0.29.0
 sqlalchemy==1.4.52
