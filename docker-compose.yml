@@ -1,9 +1,5 @@
 version: "3.8"
 
-# =============================================================================
-# Extensao comum a todos os servicos do Airflow
-# Permite DRY: webserver, scheduler e init herdam build, env, volumes e rede.
-# =============================================================================
 x-airflow-common: &airflow-common
   build: .    # Dockerfile na raiz: Airflow + dbt-postgres (Sprint 5)
   environment: &airflow-common-env
@@ -41,9 +37,8 @@ x-airflow-common: &airflow-common
     postgres:
       condition: service_healthy
 
-# =============================================================================
 # Servicos
-# =============================================================================
+
 services:
 
   # ── PostgreSQL (Data Warehouse + Metadata Airflow) ─────────────────────────

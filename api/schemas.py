@@ -1,6 +1,4 @@
 """
-schemas.py
-==========
 Modelos Pydantic para validacao e documentacao automatica dos endpoints.
 
 RoiRecord    : representa uma linha da tabela Gold public.fato_roi_marketing

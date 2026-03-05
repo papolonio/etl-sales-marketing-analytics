@@ -1,17 +1,7 @@
 """
-KommoAPIClient
-==============
 Cliente POO para a API v4 do KommoCRM.
-Compativel com o mock server (Sprint 1) via troca da variavel KOMMO_API_URL.
+Compativel com o mock server via troca da variavel KOMMO_API_URL.
 
-Uso:
-    client = KommoAPIClient(base_url, token)
-    leads         = client.get_leads()          # list[dict]
-    contacts      = client.get_contacts()       # list[dict]
-    events        = client.get_events()         # list[dict]
-    pipelines     = client.get_pipelines()      # list[dict]
-    users         = client.get_users()          # list[dict]
-    custom_fields = client.get_custom_fields()  # list[dict]
 """
 
 import logging
@@ -41,7 +31,7 @@ class KommoAPIClient:
             "Authorization": f"Bearer {token}",
         })
 
-    # ───────────────────────────────────────────────────── metodos privados ──
+    #  metodos privados
 
     def _paginate(
         self,

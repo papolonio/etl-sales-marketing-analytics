@@ -1,6 +1,4 @@
 """
-main.py — Lead-to-Cash Data API
-================================
 API RestFul que serve os dados da camada Gold (dbt) para times de BI ou Front-end.
 
 Endpoints:
@@ -8,9 +6,6 @@ Endpoints:
     GET /api/v1/roi                    todos os registros (paginado)
     GET /api/v1/roi/{campaign_id}      filtrado por campanha
     GET /api/v1/roi/ad/{ad_id}         filtrado por anuncio (granularidade maxima)
-
-Acesso: http://localhost:8001
-Docs  : http://localhost:8001/docs   (Swagger UI automatico)
 """
 
 import logging
@@ -29,7 +24,6 @@ from schemas import RoiRecord, RoiResponse
 
 log = logging.getLogger("uvicorn.error")
 
-# Startup / Shutdown
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,7 +37,6 @@ async def lifespan(app: FastAPI):
         log.info("Conexao com o banco de dados verificada com sucesso.")
     yield
 
-# Aplicacao
 
 app = FastAPI(
     title="Lead-to-Cash Data API",
@@ -87,9 +80,7 @@ def _handle_db_error(exc: Exception, context: str) -> None:
     )
 
 
-# =============================================================================
 # Endpoints
-# =============================================================================
 
 @app.get("/", tags=["health"])
 def health_check():
@@ -148,7 +139,7 @@ def get_roi(
 def get_roi_by_campaign(campaign_id: str, db: Session = Depends(get_db)):
     """
     Retorna todos os anuncios de uma campanha especifica com suas metricas de ROI.
-    - **campaign_id**: ID da campanha no Meta Ads (ex: `120210000000001`)
+    - **campaign_id**: ID da campanha no Meta Ads
     """
     sql = text(f"""
         SELECT *

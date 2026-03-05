@@ -1,6 +1,4 @@
 """
-DAG: meta_ads_ingestion
-=======================
 Extrai dados do Mock Meta Ads API e persiste na camada Raw do Data Warehouse.
 
 Fluxo de tasks:
@@ -9,8 +7,6 @@ Fluxo de tasks:
 Tabelas geradas:
     raw.meta_insights   — metricas diarias por Ad (ultimos 15 dias)
     raw.meta_campaigns  — lista de campanhas da conta
-
-Schedule: diario as 06:00 UTC
 """
 
 import os

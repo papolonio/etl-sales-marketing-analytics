@@ -1,6 +1,5 @@
 """
 Mock API Server — simula Meta Ads Graph API e KommoCRM API.
-Sprint 1: Portfolio Lead-to-Cash Pipeline
 
 Endpoints Meta Ads  : /v19.0/act_{account_id}/insights
                       /v19.0/act_{account_id}/campaigns
@@ -22,17 +21,14 @@ import random
 
 app = FastAPI(title="Mock API — Meta Ads & KommoCRM", version="1.0.0")
 
-
-# =============================================================================
 # SECAO 1 — META ADS  (Hierarquia: Campaign -> AdSet -> Ad)
-# =============================================================================
 
-# ── Vocabulario para nomes realistas ──────────────────────────────────────────
+# ── Vocabulario
 _CAMP_TYPES = [
     ("Leads",           "LEAD_GENERATION"),
     ("Conversoes",      "CONVERSIONS"),
     ("Trafego",         "LINK_CLICKS"),
-    ("Alcance",         "REACH"),
+    ("Alcance",         "REACH"),git 
     ("Remarketing",     "CONVERSIONS"),
 ]
 _PRODUCTS = [
@@ -48,7 +44,7 @@ _ADSET_TEMPLATES = [
 _AD_FORMATS  = ["Carousel", "Video", "Imagem", "Story", "Reels", "Collection"]
 _AD_VARIANTS = ["V1", "V2", "V3", "V4", "V5", "Dark Post", "UGC", "Depoimento"]
 
-# ── Geracao deterministica da hierarquia (seed=7) ─────────────────────────────
+# ── Geracao deterministica da hierarquia (seed=7)
 _rng_h = random.Random(7)
 
 CAMPAIGNS: list = []
@@ -151,7 +147,7 @@ def _build_insights() -> list:
 INSIGHTS_DATA = _build_insights()
 
 
-# ── Meta: Insights (nivel ad, ultimos 15 dias) ────────────────────────────────
+# ── Meta: Insights (nivel ad, ultimos 15 dias)
 @app.get("/v19.0/act_{account_id}/insights")
 def meta_insights(account_id: str):
     """
@@ -163,7 +159,7 @@ def meta_insights(account_id: str):
     return {"data": INSIGHTS_DATA, "paging": {}}
 
 
-# ── Meta: Campaigns ───────────────────────────────────────────────────────────
+# ── Meta: Campaigns
 @app.get("/v19.0/act_{account_id}/campaigns")
 def meta_campaigns(account_id: str):
     """
@@ -172,10 +168,7 @@ def meta_campaigns(account_id: str):
     """
     return {"data": CAMPAIGNS, "paging": {}}
 
-
-# =============================================================================
 # SECAO 2 — KOMMO CRM
-# =============================================================================
 
 # IDs dos custom fields de UTM (espelham a hierarquia do Meta para o JOIN)
 UTM_FIELD_SOURCE      = 901001
@@ -395,7 +388,7 @@ def _paginate(data: list, page: int) -> list:
     return data[start: start + _PAGE_SIZE]
 
 
-# ── Kommo: Leads ──────────────────────────────────────────────────────────────
+# ── Kommo: Leads
 @app.get("/api/v4/leads")
 def kommo_leads(page: int = Query(1), limit: int = Query(250)):
     """

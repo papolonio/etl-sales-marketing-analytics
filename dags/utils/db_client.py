@@ -1,6 +1,4 @@
 """
-PostgresClient
-==============
 Cliente POO para persistencia na camada Raw do Data Warehouse.
 
 Comportamento Raw Layer (Truncate + Insert):
@@ -53,13 +51,13 @@ class PostgresClient:
             db,
         )
 
-    # ───────────────────────────────────────────────────── metodos privados ──
+    # metodos privados
 
     def _ensure_schema(self, schema: str) -> None:
         """
         Cria o schema se nao existir.
         O try/except absorve a UniqueViolation que ocorre quando duas tasks
-        paralelas executam o CREATE SCHEMA simultaneamente (race condition).
+        paralelas executam o CREATE SCHEMA simultaneamente.
         """
         try:
             with self._engine.begin() as conn:
@@ -90,7 +88,7 @@ class PostgresClient:
                 )
         return df
 
-    # ────────────────────────────────────────────────────── metodos publicos ──
+    # metodos publicos
 
     def load(
         self,

@@ -1,7 +1,5 @@
 """
-DAG: dbt_transform
-==================
-DAG consumidora disparada por Data-Aware Scheduling (Airflow Datasets).
+DAG *disparada* por Data-Aware Scheduling (Airflow Datasets).
 
 Roda automaticamente assim que AMBAS as DAGs produtoras concluirem
 a carga na camada Raw:

@@ -1,10 +1,7 @@
 """
-database.py
-===========
 Gerenciamento de conexao com o PostgreSQL via SQLAlchemy.
 
 Padrao FastAPI: get_db() e uma dependencia injetada nos endpoints via Depends().
-Garante que cada request abre e fecha a sessao corretamente (sem leak de conexao).
 """
 
 import logging
@@ -26,7 +23,7 @@ DATABASE_URL = f"postgresql+psycopg2://{_USER}:{_PASS}@{_HOST}:{_PORT}/{_DB}"
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,   # detecta conexoes mortas antes de usar
+    pool_pre_ping=True,   # detecçao conexoes mortas antes de usar
     pool_size=5,
     max_overflow=10,
 )
@@ -39,7 +36,7 @@ log.info("DatabaseEngine configurado | host=%s port=%s db=%s", _HOST, _PORT, _DB
 def get_db():
     """
     Dependencia FastAPI: fornece uma sessao SQLAlchemy por request
-    e garante o fechamento mesmo em caso de excecao.
+    e o fechamento.
     """
     db: Session = SessionLocal()
     try:

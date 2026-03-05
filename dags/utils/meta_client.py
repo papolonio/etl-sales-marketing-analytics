@@ -1,13 +1,7 @@
 """
-MetaAdsClient
-=============
 Cliente POO para a Graph API do Meta Ads (v19.0).
 Compativel com o mock server (Sprint 1) via troca da variavel META_API_URL.
 
-Uso:
-    client = MetaAdsClient(base_url, access_token, account_id)
-    insights  = client.get_insights(days=15)   # list[dict]
-    campaigns = client.get_campaigns()          # list[dict]
 """
 
 import json

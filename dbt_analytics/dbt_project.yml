@@ -15,9 +15,7 @@ snapshot-paths: ["snapshots"]
 target-path:  "target"
 clean-targets: ["target", "dbt_packages"]
 
-# =============================================================================
 # Configuracao de materializacao por camada (Arquitetura Medallion)
-# =============================================================================
 models:
   lead_to_cash:
 

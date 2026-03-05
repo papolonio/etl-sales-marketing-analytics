@@ -1,26 +1,5 @@
 """
-DAG: kommo_ingestion
-====================
 Extrai dados do Mock KommoCRM API e persiste na camada Raw do Data Warehouse.
-
-Fluxo de tasks (2 grupos em paralelo):
-
-    Grupo 1 (dados transacionais — rodam em paralelo):
-        extract_leads | extract_contacts | extract_events
-                    |           |              |
-                    v           v              v
-    Grupo 2 (dados de referencia — rodam em paralelo apos grupo 1):
-        extract_pipelines | extract_users | extract_custom_fields
-
-Tabelas geradas:
-    raw.kommo_leads             — leads com custom_fields_values (UTM tracking)
-    raw.kommo_contacts          — contatos
-    raw.kommo_events            — historico de mudancas de status
-    raw.kommo_pipelines_status  — pipelines com seus status (flat join)
-    raw.kommo_users             — usuarios responsaveis
-    raw.kommo_custom_fields     — definicao dos campos customizados
-
-Schedule: diario as 07:00 UTC (apos meta_ads_ingestion)
 """
 
 import os
@@ -73,7 +52,7 @@ def _build_clients():
 )
 def kommo_ingestion():
 
-    # ── Grupo 1: dados transacionais (paralelo) ───────────────────────────────
+    # Grupo 1: dados transacionais
 
     @task()
     def extract_leads() -> str:
@@ -108,7 +87,7 @@ def kommo_ingestion():
         log.info("[DAG kommo] extract_events: %d registros", n)
         return f"{n} registros em raw.kommo_events"
 
-    # ── Grupo 2: dados de referencia (paralelo, apos grupo 1) ─────────────────
+    # Grupo 2: dados de referencia (apos grupo 1)
 
     @task(outlets=[dataset_kommo])
     def extract_pipelines() -> str:
