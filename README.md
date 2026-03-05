@@ -1,59 +1,25 @@
-# 📊 Lead-to-Cash Analytics Pipeline: Unificando Marketing e Vendas
+# Lead-to-Cash Data Ecosystem: Uma Abordagem End-to-End com a Modern Data Stack
 
+Bem-vindo ao meu ecossistema de dados. Este projeto não é apenas um pipeline; é a simulação de um cenário real de engenharia de dados (Analytics Engineering) projetado para resolver um dos maiores desafios das empresas: **cruzar dados de Marketing (Meta Ads) com Vendas (KommoCRM) para descobrir o verdadeiro ROI.**
 
+## O Contexto e o Problema de Negócio
 
-Um projeto de Engenharia de Dados *end-to-end* desenvolvido para solucionar um dos problemas mais complexos de operações financeiras e de marketing: **a quebra de rastreabilidade (atribuição) entre o clique no anúncio e a venda fechada.**
+Em ambientes reais, as empresas investem em anúncios no **Meta Ads** (Facebook/Instagram) e gerenciam seus leads no **KommoCRM**. O problema? Esses dados vivem em silos. O marketing não sabe quais leads viraram clientes pagantes, e vendas não sabe de qual campanha o cliente veio. 
 
-## O Problema de Negócio
+**A Solução:** Construí um ecossistema completo (Lead-to-Cash) que extrai esses dados, cruza as informações no Data Warehouse e disponibiliza as métricas limpas e tratadas prontas para o consumo das áreas de negócio.
 
-Em arquiteturas tradicionais, os dados operacionais vivem em silos:
-1. **Marketing (Meta Ads):** Sabe quanto gastou, quantos cliques gerou e o Custo por Clique (CPC). Mas não sabe se o lead realmente comprou algo.
-2. **Vendas (Kommo CRM):** Sabe quem comprou e qual foi a receita gerada. Mas não sabe de qual anúncio ou campanha aquele cliente veio.
+ *Nota de Arquitetura: Como não posso expor dados reais ou tokens de clientes no GitHub, eu construí do zero uma API "Mock" em FastAPI que simula perfeitamente o comportamento e os payloads reais do Meta Ads e do KommoCRM. Isso significa que você pode clonar este repositório e rodar o ecossistema inteiro na sua máquina, 100% offline e funcional.*
 
-**A Consequência:** A empresa queima dinheiro escalando campanhas que geram leads baratos, mas que nunca convertem em vendas reais, distorcendo o Retorno sobre Investimento (ROI).
+## O Ecossistema (Arquitetura e Stack)
 
-## O Impacto da Solução (Business Value)
+Eu atuei em todas as pontas do ciclo de vida do dado, garantindo escalabilidade, governança e documentação:
 
-Este pipeline cruza os dados de ambas as pontas, implementando a esteira de **Lead-to-Cash**, permitindo ao time de *Growth* e Diretoria responder em tempo real:
-* **ROAS Real (Return on Ad Spend):** Qual anúncio específico gerou a maior receita de vendas fechadas?
-* **CAC Preciso (Customer Acquisition Cost):** Quanto custou, no nível da campanha, adquirir um cliente pagante?
-* **Otimização de Orçamento:** Possibilidade de pausar anúncios de "falsa performance" e realocar orçamento para campanhas de alta conversão.
+1. **Simulação de Origem (Mock APIs):** FastAPI simulando os endpoints do Meta Ads e KommoCRM.
+2. **Orquestração & Ingestão (Extract & Load):** O **Apache Airflow** é o maestro. Ele consome as APIs e carrega os dados brutos na camada *Bronze* do Data Warehouse.
+3. **Armazenamento (Data Warehouse):** **PostgreSQL** conteinerizado atuando como nosso DW central.
+4. **Transformação & Governança (Transform):** O **dbt (data build tool)** entra em cena para limpar, testar e cruzar os dados, movendo-os pelas camadas *Silver* e *Gold*. A linhagem de dados (Data Lineage) e documentação são geradas automaticamente.
+5. **Data as a Service - DaaS (Serving):** Em vez de ligar um BI direto no banco, construí uma **API em FastAPI** que consome a camada *Gold* do dbt. Isso garante segurança, controle de acesso e permite que o Front-end, o BI ou cientistas de dados consumam métricas como CAC e LTV via endpoints padronizados.
+6. **Infraestrutura:** Tudo orquestrado via **Docker & Docker Compose** (IaC).
 
----
-
-## Arquitetura Técnica e Desafios Resolvidos
-
-O projeto foi desenhado sob a **Arquitetura Medallion** (Bronze, Silver, Gold), focado em modularidade, resiliência e disponibilização via **Data as a Service (DaaS)**.
-
-### 1. Ingestão (Airflow + Python POO)
-* **Desafio:** APIs RESTful geralmente possuem paginação, rate limits e retornos complexos.
-* **Solução:** Construção de *API Clients* em Python utilizando **Programação Orientada a Objetos (POO)**. As DAGs do Apache Airflow atuam apenas como orquestradoras (separação de responsabilidades), extraindo os dados em estado bruto (Raw/Bronze) de forma idempotente para o PostgreSQL.
-
-### 2. Transformação e Modelagem (dbt Core + PostgreSQL)
-* **Desafio:** O Kommo CRM retorna as UTMs (parâmetros de rastreio de marketing) "escondidas" e aninhadas dentro de um array JSON complexo (`custom_fields_values`).
-* **Solução:** Utilização de modelagem dimensional via **dbt (Data Build Tool)**. Na camada *Silver*, apliquei técnicas avançadas de SQL no PostgreSQL (como `LEFT JOIN LATERAL jsonb_array_elements`) para fazer o *unnest* e o *pivot* do JSON, transformando chaves dinâmicas em colunas tabulares estruturadas (`utm_campaign_id`, `utm_ad_id`).
-* **Gold Layer:** Construção da `fato_roi_marketing`, cruzando os dados de custo do Meta Ads com os dados de conversão e receita do CRM.
-
-### 3. Disponibilização: Data as a Service (FastAPI)
-* **Desafio:** Conectar ferramentas de BI ou Front-ends diretamente ao Data Warehouse gera riscos de segurança, gargalos de conexão e forte acoplamento.
-* **Solução:** Desenvolvimento de uma API Restful de leitura com **FastAPI**, SQLAlchemy e Pydantic. Ela serve os dados agregados da camada Gold de forma rápida, tipada e paginada, isolando o banco de dados analítico do consumidor final.
-
----
-
-## Stack Tecnológica
-
-* **Orquestração:** Apache Airflow
-* **Transformação & Data Quality:** dbt (Data Build Tool)
-* **Data Warehouse:** PostgreSQL
-* **DaaS / API:** FastAPI, Uvicorn, SQLAlchemy
-* **Linguagem:** Python 3.11+
-* **Infraestrutura:** Docker & Docker Compose
-
----
-
-## Como executar este projeto localmente
-
-**1. Clone o repositório:**
-```bash
-git clone [https://github.com/SEU_USUARIO/etl-sales-marketing-analytics.git](https://github.com/SEU_USUARIO/etl-sales-marketing-analytics.git)
-cd etl-sales-marketing-analytics
+## Próximos Passos (Roadmap)
+- [ ] **Visualização (BI):** Plugar um Metabase ou Streamlit consumindo a API (DaaS) para gerar o dashboard final para os stakeholders.
