@@ -15,4 +15,4 @@ postgres-data/
 pgdata/
 
 # OS
-.DS_Store
+.DS_Storedbt_analytics/target/
