@@ -36,11 +36,11 @@ def _build_db_client():
     """Instancia PostgresClient com vars de ambiente (executa no worker)."""
     from utils.db_client import PostgresClient
     return PostgresClient(
-        host=     os.environ["POSTGRES_HOST"],
-        port=     os.environ["POSTGRES_PORT"],
-        db=       os.environ["POSTGRES_DB"],
-        user=     os.environ["POSTGRES_USER"],
-        password= os.environ["POSTGRES_PASSWORD"],
+        host=     os.getenv("POSTGRES_HOST", "postgres"),
+        port=     os.getenv("POSTGRES_PORT", "5432"),
+        db=       os.getenv("POSTGRES_DB", "data_warehouse"),
+        user=     os.getenv("POSTGRES_USER", "admin"),
+        password= os.getenv("POSTGRES_PASSWORD", "admin"),
     )
 
 

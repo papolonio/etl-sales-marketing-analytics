@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Union
 
 import pandas as pd
 from psycopg2.errors import UniqueViolation
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
@@ -126,11 +126,23 @@ class PostgresClient:
         df = pd.DataFrame(records)
         df = self._serialize_nested(df)
 
+        # Se a tabela ja existe, trunca em vez de dropar.
+        # DROP TABLE (usado pelo if_exists='replace') falha quando ha views
+        # dependentes (ex: staging.stg_kommo_leads depende de raw.kommo_leads).
+        # TRUNCATE preserva o schema da tabela e nao afeta as views.
+        inspector = inspect(self._engine)
+        table_exists = inspector.has_table(table, schema=schema)
+
+        if table_exists:
+            with self._engine.begin() as conn:
+                conn.execute(text(f'TRUNCATE TABLE "{schema}"."{table}"'))
+            log.debug("[PostgresClient] TRUNCATE em %s.%s", schema, table)
+
         df.to_sql(
             name=table,
             con=self._engine,
             schema=schema,
-            if_exists="replace",
+            if_exists="append",
             index=False,
             chunksize=500,
             method="multi",
