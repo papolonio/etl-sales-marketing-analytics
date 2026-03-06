@@ -88,7 +88,7 @@ Com os containers rodando, os serviços estarão disponíveis nas seguintes port
 | **Airflow UI** | Orquestração | [http://localhost:8080](https://www.google.com/search?q=http://localhost:8080) | `admin` / `admin` |
 | **dbt Docs** | Catálogo e Linhagem | [http://localhost:8081](https://www.google.com/search?q=http://localhost:8081) | *Acesso Direto* |
 | **Data API (DaaS)** | Consumo da Camada Gold | [http://localhost:8001/docs](https://www.google.com/search?q=http://localhost:8001/docs) | *Acesso Direto* |
-| **Mock Sources API** | Origem dos Dados (Fake) | [http://localhost:8000/docs](https://www.google.com/search?q=http://localhost:8000/docs) | *Acesso Direto* |
+| **Mock Sources API** | Origem dos Dados (Padronizados) | [http://localhost:8000/docs](https://www.google.com/search?q=http://localhost:8000/docs) | *Acesso Direto* |
 | **PostgreSQL** | Data Warehouse (DW) | `localhost:5432` | `admin` / `admin` |
 
 ```
