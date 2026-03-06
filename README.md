@@ -61,24 +61,21 @@ O ambiente foi configurado para subir com facilidade na sua máquina.
    ```bash
    git clone [https://github.com/SEU_USUARIO/pipeline-etl.git](https://github.com/SEU_USUARIO/pipeline-etl.git)
    cd pipeline-etl
+```
 
 ```
 
 2. **Inicialize o ambiente Airflow:**
-*Garante a criação do banco de metadados e dos usuários.*
 ```bash
 docker-compose up airflow-init
 
 ```
-
 
 3. **Suba os containers:**
 ```bash
 docker-compose up -d
 
 ```
-
-
 
 ---
 
