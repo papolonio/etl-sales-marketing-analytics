@@ -28,7 +28,7 @@ _CAMP_TYPES = [
     ("Leads",           "LEAD_GENERATION"),
     ("Conversoes",      "CONVERSIONS"),
     ("Trafego",         "LINK_CLICKS"),
-    ("Alcance",         "REACH"),git 
+    ("Alcance",         "REACH"),
     ("Remarketing",     "CONVERSIONS"),
 ]
 _PRODUCTS = [
@@ -104,7 +104,7 @@ def _build_insights() -> list:
     rng_perf = random.Random(13)
     perf_map = {c["id"]: rng_perf.uniform(0.3, 3.0) for c in CAMPAIGNS}
 
-    for days_back in range(15):
+    for days_back in range(90):
         day = today - timedelta(days=days_back)
         for ad in ADS:
             adset    = ADSET_MAP[ad["adset_id"]]
@@ -264,9 +264,8 @@ def _build_leads(n: int = 1250) -> list:
         adset    = ADSET_MAP[ad["adset_id"]]
         campaign = CAMPAIGN_MAP[ad["campaign_id"]]
 
-        month   = rng.randint(1, 11)
-        day     = rng.randint(1, 28)
-        created = int(datetime(2025, month, day).timestamp())
+        lead_date = date.today() - timedelta(days=rng.randint(0, 89))
+        created   = int(datetime(lead_date.year, lead_date.month, lead_date.day).timestamp())
         status  = rng.choice(_STATUS_POOL)
 
         # Preco realista por status:

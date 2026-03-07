@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db, ping
 from schemas import RoiRecord, RoiResponse
+from routers import dashboard
 
 log = logging.getLogger("uvicorn.error")
 
@@ -50,6 +51,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Router do Dashboard Executivo (Fase 3 — DaaS)
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 
 # Constante com o nome completo da tabela Gold
 _TABELA_ROI = "public.fato_roi_marketing"

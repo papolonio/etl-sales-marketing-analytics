@@ -155,11 +155,28 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8001/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ── Dashboard Streamlit (Fase 4 — Frontend) ───────────────────────────────
+  # Acesso: http://localhost:8501
+  frontend:
+    build:
+      context: ./frontend
+    container_name: dashboard_streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      # Aponta para o servico api na rede interna Docker
+      API_BASE: "http://api:8001/api/v1/dashboard"
+    networks:
+      - etl_network
+    depends_on:
+      api:
+        condition: service_healthy
 
 # ── dbt Docs — Documentacao interativa do pipeline (Sprint 5) ────────────
   # Acesso: http://localhost:8081
