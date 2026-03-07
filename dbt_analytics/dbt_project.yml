@@ -25,6 +25,12 @@ models:
       +materialized: view
       +schema: staging       # -> schema 'staging' (via macro generate_schema_name)
 
+    intermediate:
+      # Silver+: enriquecimentos e JOINs que alimentam a camada Gold.
+      # Views evitam armazenar dados derivados desnecessariamente.
+      +materialized: view
+      +schema: intermediate  # -> schema 'intermediate' (via macro generate_schema_name)
+
     marts:
       # Gold: tabelas fisicas para consultas analiticas de alta performance
       # (FastAPI + BI tools consultam direto sem reprocessar JOINs complexos)

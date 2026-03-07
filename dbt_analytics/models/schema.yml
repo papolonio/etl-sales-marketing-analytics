@@ -1,0 +1,194 @@
+version: 2
+
+# =============================================================================
+# Staging — Silver Layer
+# =============================================================================
+models:
+
+  - name: stg_meta_campaigns
+    description: >
+      Catalogo de campanhas Meta Ads. Uma linha por campanha.
+      Fonte de verdade para nomes e atributos usados na dim_campaign.
+    columns:
+      - name: campaign_id
+        description: ID unico da campanha no Meta Ads.
+        tests: [unique, not_null]
+      - name: campaign_name
+        tests: [not_null]
+      - name: status
+        tests: [not_null]
+      - name: objective
+        tests: [not_null]
+
+  - name: stg_meta_insights
+    description: >
+      Metricas diarias por anuncio (ad) vindas da Graph API.
+      Granularidade: ad_id x data_ref. Campos numericos castados de TEXT para NUMERIC/INTEGER.
+    columns:
+      - name: ad_id
+        description: ID do anuncio — chave de JOIN com utm_ad_id de stg_kommo_leads.
+        tests: [not_null]
+      - name: data_ref
+        description: Data de referencia das metricas (date_start da API).
+        tests: [not_null]
+      - name: spend
+        tests: [not_null]
+      - name: campaign_id
+        tests: [not_null]
+
+  - name: stg_kommo_leads
+    description: >
+      Leads do CRM Kommo com UTMs extraidas do campo JSON custom_fields_values.
+      Timestamps Unix convertidos para DATE. Flags booleanas is_ganho / is_perdido.
+    columns:
+      - name: lead_id
+        description: ID unico do lead no Kommo.
+        tests: [unique, not_null]
+      - name: data_criacao
+        tests: [not_null]
+      - name: status_id
+        tests: [not_null]
+      - name: responsible_user_id
+        tests: [not_null]
+
+  - name: stg_kommo_users
+    description: >
+      Usuarios responsaveis (vendedores) do Kommo. Uma linha por usuario.
+    columns:
+      - name: user_id
+        description: ID unico do usuario/vendedor.
+        tests: [unique, not_null]
+      - name: user_name
+        tests: [not_null]
+
+# =============================================================================
+# Intermediate — Silver+ Layer
+# =============================================================================
+
+  - name: int_marketing_attribution
+    description: >
+      Enriquece cada lead Kommo com a hierarquia de campanha Meta via UTM.
+      LEFT JOIN preserva leads organicos (sem rastreamento) com colunas meta_* = NULL.
+      DISTINCT ON ad_id evita multiplicar leads pelo eixo de data dos insights.
+    columns:
+      - name: lead_id
+        description: Chave primaria — uma linha por lead.
+        tests: [unique, not_null]
+      - name: responsible_user_id
+        tests: [not_null]
+      - name: data_criacao
+        tests: [not_null]
+      - name: tem_atribuicao_meta
+        description: TRUE se o lead possui rastreamento UTM valido com anuncio Meta.
+        tests: [not_null]
+
+  - name: int_sales_funnel
+    description: >
+      Calcula days_to_close (DATE - DATE = INTEGER em PostgreSQL) e ciclo_bucket
+      para cada lead. days_to_close = NULL para leads em aberto no funil.
+    columns:
+      - name: lead_id
+        description: Chave primaria — uma linha por lead.
+        tests: [unique, not_null]
+      - name: ciclo_bucket
+        tests: [not_null]
+
+# =============================================================================
+# Marts — Gold Layer
+# =============================================================================
+
+  - name: fact_sales
+    description: >
+      Fato de vendas. Granularidade: 1 linha por venda ganha (is_ganho = TRUE).
+      Base primaria do dashboard executivo: faturamento, ticket medio, run rate.
+    columns:
+      - name: lead_id
+        description: Chave primaria — uma venda por lead_id.
+        tests: [unique, not_null]
+      - name: data_venda
+        tests: [not_null]
+      - name: mes_venda
+        description: Primeiro dia do mes da venda. Chave de JOIN com fact_targets.
+        tests: [not_null]
+      - name: receita
+        tests: [not_null]
+      - name: responsible_user_id
+        tests: [not_null]
+
+  - name: fact_leads
+    description: >
+      Fato de leads. Granularidade: 1 linha por lead (todos os status).
+      Usado para taxa de conversao, CPL e analise de funil.
+    columns:
+      - name: lead_id
+        description: Chave primaria — um lead por linha.
+        tests: [unique, not_null]
+      - name: data_lead
+        tests: [not_null]
+      - name: mes_lead
+        tests: [not_null]
+      - name: status_id
+        tests: [not_null]
+
+  - name: fact_marketing_spend
+    description: >
+      Gasto de marketing agregado por campanha e dia.
+      Granularidade: campaign_id x data. Base para grafico de evolucao temporal
+      e calculo de CPL cruzando com fact_leads.
+    columns:
+      - name: data
+        description: Data de referencia (data_ref do stg_meta_insights).
+        tests: [not_null]
+      - name: campaign_id
+        tests: [not_null]
+      - name: total_spend
+        tests: [not_null]
+
+  - name: dim_campaign
+    description: Dimensao de campanhas Meta Ads. Uma linha por campanha.
+    columns:
+      - name: campaign_id
+        description: Chave primaria da dimensao.
+        tests: [unique, not_null]
+      - name: campaign_name
+        tests: [not_null]
+
+  - name: dim_salesperson
+    description: Dimensao de vendedores. Uma linha por usuario Kommo.
+    columns:
+      - name: salesperson_id
+        description: Chave primaria da dimensao (user_id do Kommo).
+        tests: [unique, not_null]
+      - name: salesperson_name
+        tests: [not_null]
+
+  - name: fact_targets
+    description: >
+      Metas mensais de receita por vendedor, carregadas via seed CSV.
+      Granularidade: responsible_user_id x mes (primeiro dia do mes).
+      JOIN com fact_sales: ON responsible_user_id AND mes_venda = mes.
+    columns:
+      - name: responsible_user_id
+        tests: [not_null]
+      - name: mes
+        description: "Primeiro dia do mes da meta (ex: 2026-03-01)."
+        tests: [not_null]
+      - name: meta_receita
+        tests: [not_null]
+
+# =============================================================================
+# Seeds
+# =============================================================================
+seeds:
+
+  - name: metas_vendedores
+    description: >
+      Metas mensais de receita por vendedor. Editavel via st.data_editor
+      no Streamlit (write-back) ou diretamente no CSV + dbt seed.
+    columns:
+      - name: responsible_user_id
+        tests: [not_null]
+      - name: mes
+        tests: [not_null]
+      - name: meta_receita
+        tests: [not_null]
