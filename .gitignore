@@ -1,0 +1,23 @@
+# Ambientes e Segredos
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Airflow
+logs/
+plugins/
+airflow-webserver.pid
+
+# Banco de Dados
+postgres-data/
+pgdata/
+
+# OS
+.DS_Storedbt_analytics/target/
+dbt_analytics/target/
+contexto_sprint5.md
+_referencias/
+_referencias/
+PROJECT_CONTEXT.md
