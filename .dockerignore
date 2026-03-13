@@ -1,0 +1,72 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# .dockerignore — Raiz do projeto (afeta: build: . dos servicos Airflow e dbt-docs)
+#
+# O Dockerfile raiz so precisa de:
+#   dags/requirements.txt   (COPY dags/requirements.txt /tmp/requirements.txt)
+# Todo o resto e montado via volumes em tempo de execucao — nao precisa entrar
+# no build context.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Controle de versao ────────────────────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+.github
+
+# ── Ambientes Python locais ───────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+.Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# ── Artefatos dbt compilados (os mais pesados do projeto) ─────────────────────
+# target/ pode ter centenas de MB: graph.gpickle, manifest.json, partial_parse.msgpack,
+# arquivos .sql compilados e arquivos de run. Montado via volume em runtime.
+dbt_analytics/target/
+dbt_analytics/logs/
+dbt_analytics/.user.yml
+
+# ── Logs do Airflow ───────────────────────────────────────────────────────────
+logs/
+plugins/
+
+# ── Banco de dados ────────────────────────────────────────────────────────────
+postgres_data/
+
+# ── Variaveis de ambiente (seguranca) ─────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+# .env.example permitido (documentacao publica)
+
+# ── Servicos com contexto proprio (nao usam build: .) ─────────────────────────
+# Excluir evita enviar codigo irrelevante para o daemon do Docker.
+api/
+frontend/
+mock_server/
+postgres/
+
+# ── Documentacao e assets ─────────────────────────────────────────────────────
+assets/
+*.md
+PRD_DASHBOARD.md
+contexto_sprint5.md
+
+# ── IDE e SO ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Docker (o daemon nao precisa de si mesmo) ─────────────────────────────────
+docker-compose*.yml
+.dockerignore
