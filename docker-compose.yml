@@ -1,0 +1,226 @@
+version: "3.8"
+
+x-airflow-common: &airflow-common
+  build: .    # Dockerfile na raiz: Airflow + dbt-postgres (Sprint 5)
+  environment: &airflow-common-env
+    # ── Executor e banco de metadados do Airflow ─────────────────────────────
+    AIRFLOW__CORE__EXECUTOR:                    LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:        postgresql+psycopg2://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY:                  ${AIRFLOW_FERNET_KEY:-JexE3D_iG0RPkfBNf4K1X9bSWDJ__8L_nZ9gCi5CQPM=}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES:               "false"
+    AIRFLOW__API__AUTH_BACKENDS:                "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+    AIRFLOW__WEBSERVER__SECRET_KEY:             ${AIRFLOW_SECRET_KEY:-portfolio-secret-change-in-prod}
+    # ── Variaveis de negocio injetadas nas DAGs ───────────────────────────────
+    META_API_URL:      ${META_API_URL:-http://mock_api:8000}
+    META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:-mock_token_portfolio_meta}
+    META_ACCOUNT_ID:   ${META_ACCOUNT_ID:-123456789}
+    KOMMO_API_URL:     ${KOMMO_API_URL:-http://mock_api:8000}
+    KOMMO_TOKEN:       ${KOMMO_TOKEN:-mock_token_portfolio_kommo}
+    # ── Conexao com o Data Warehouse ─────────────────────────────────────────
+    # POSTGRES_HOST hardcoded: evita que .env com POSTGRES_HOST=localhost
+    # sobrescreva o valor (${VAR:-default} so usa o default quando VAR esta ausente).
+    POSTGRES_HOST:     postgres
+    POSTGRES_PORT:     ${POSTGRES_PORT:-5432}
+    POSTGRES_DB:       ${POSTGRES_DB:-data_warehouse}
+    POSTGRES_USER:     ${POSTGRES_USER:-admin}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./dbt_analytics:/opt/airflow/dbt_analytics
+  user: "${AIRFLOW_UID:-50000}:0"
+  networks:
+    - etl_network
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+# Servicos
+
+services:
+
+  # ── PostgreSQL (Data Warehouse + Metadata Airflow) ─────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: postgres-dw
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-data_warehouse}
+      POSTGRES_USER:     ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - etl_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-data_warehouse}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Mock API Server (Meta Ads + KommoCRM) ─────────────────────────────────
+  mock_api:
+    build:
+      context: ./mock_server
+    container_name: api-mock
+    ports:
+      - "8000:8000"
+    networks:
+      - etl_network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Airflow Init (migra DB e cria usuario admin — roda uma unica vez) ──────
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname Portfolio \
+          --role Admin \
+          --email admin@portfolio.local \
+          --password admin \
+        2>/dev/null || echo "Usuario admin ja existe, seguindo..."
+    restart: "no"
+
+  # ── Airflow Webserver (UI — porta 8080) ────────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock_api:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── Airflow Scheduler ──────────────────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock_api:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── API de Negocio — Data as a Service (Sprint 4) ─────────────────────────
+  # Serve os dados da camada Gold (dbt) para BI / Front-end.
+  # PORTA 8001: mock_api ja ocupa a 8000 (nao altere para evitar conflito).
+  api:
+    build:
+      context: ./api
+    container_name: api-business
+    ports:
+      - "8001:8001"
+    environment:
+      POSTGRES_HOST:     postgres          # nome do servico na rede Docker (nao localhost)
+      POSTGRES_PORT:     ${POSTGRES_PORT:-5432}
+      POSTGRES_DB:       ${POSTGRES_DB:-data_warehouse}
+      POSTGRES_USER:     ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      CLIENT_API_KEY:    ${CLIENT_API_KEY:-l2c-secret-key-123}
+    volumes:
+      - ./api:/app   # hot-reload: alteracoes no codigo refletem sem rebuild
+    networks:
+      - etl_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# ── dbt Docs — Documentacao interativa do pipeline (Sprint 5) ────────────
+  # Acesso: http://localhost:8081
+  dbt-docs:
+    build: .
+    container_name: dbt-docs
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST:     postgres
+      POSTGRES_PORT:     ${POSTGRES_PORT:-5432}
+      POSTGRES_DB:       ${POSTGRES_DB:-data_warehouse}
+      POSTGRES_USER:     ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+    volumes:
+      - ./dbt_analytics:/opt/airflow/dbt_analytics
+    ports:
+      - "8081:8081"
+    networks:
+      - etl_network
+    command: >
+      bash -c "cd /opt/airflow/dbt_analytics &&
+      dbt docs generate --profiles-dir . &&
+      cd target &&
+      python -m http.server 8081"
+
+  # ── Dashboard Executivo (Streamlit) ───────────────────────────────────────
+  # Consome a API interna via http://api:8001 (DNS Docker, nao localhost).
+  # Acesso: http://localhost:8501
+  frontend:
+    build:
+      context: ./frontend
+    container_name: app-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      # Aponta para o servico 'api' na rede interna Docker.
+      # NAO use localhost — dentro do container isso aponta para ele mesmo.
+      API_BASE: http://api:8001/api/v1/dashboard
+    networks:
+      - etl_network
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+networks:
+  etl_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
