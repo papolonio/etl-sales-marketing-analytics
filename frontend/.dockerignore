@@ -1,0 +1,12 @@
+# .dockerignore do contexto ./frontend
+# Contexto ja e pequeno (app.py + requirements.txt + Dockerfile).
+# Este arquivo e uma salvaguarda caso novos arquivos sejam adicionados ao diretorio.
+
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.env
+.DS_Store
+Dockerfile
+.dockerignore
